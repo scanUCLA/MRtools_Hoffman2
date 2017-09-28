@@ -187,18 +187,22 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Open Prespecified Overlays
 Count = 2;
-if nargin > 0;
-    try
-        if iscell(inputImage{1})
-            if length(inputImage)>1
-                openOverlay(inputImage{2});
+if nargin > 0;    
+%     if isa(inputImage,'uint8')
+%         [stuff ras] = ReadFileFromBlob(bin);
+%     else
+        try
+            if iscell(inputImage{1})
+                if length(inputImage)>1
+                    openOverlay(inputImage{2});
+                end
+            else
+                openOverlay(inputImage);
             end
-        else
+        catch
             openOverlay(inputImage);
         end
-    catch
-        openOverlay(inputImage);
-    end
+%     end
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 yy = Obj(1).clim(1):(Obj(1).clim(2)-Obj(1).clim(1))/255:Obj(1).clim(2);
@@ -401,16 +405,46 @@ set(pane,'Visible','on');
         if nargin == 0
             nnn = spm_select(inf,'image');
         else
-            if iscell(varargin{1})
-                nnn = char(varargin{1});
+            if iscell(varargin{1}) 
+                if ~isa(varargin{1}{1},'uint8')
+                    nnn = char(varargin{1});
+                else
+                    nnn = {};
+                    for ii = 1:numel(varargin{1})
+                        [mm hh] = ReadFileFromBlob(varargin{1}{ii});
+                        hh.n = [ii 1];
+                        spm_write_vol(hh,mm);
+                        nnn{ii,1} = [hh.fname ',' num2str(ii)];
+                    end
+                    nnn = char(nnn);
+                end
             elseif ischar(varargin{1})
                 nnn = varargin{1};
+            elseif isa(varargin{1},'uint8')
+                [mm hh] = ReadFileFromBlob(varargin{1});
+                spm_write_vol(hh,mm);
+                nnn = hh.fname;
             else
                 nnn = spm_select(inf,'image');
             end
             
             for kk = 1:size(nnn,1)
+%                 if isa(nnn,'uint8')
+%                     fid = fopen([pwd '/tmp.nii']);
+%                     fwrite(fid,nnn,'uint8');
+%                     fclose(fid);
+%                     n = [pwd '/tmp.nii'];
+% %                 elseif isa(nnn{kk},'uint8')
+% %                     fid = fopen(['/tmp' '/tmp.nii'],'w');
+% %                     fwrite(fid,nnn{kk},'uint8');
+% %                     fclose(fid);
+% %                     n = ['/tmp' '/tmp.nii'];
+%                 else
+%                     n = strtrim(nnn(kk,:));
+%                 end
+                
                 n = strtrim(nnn(kk,:));
+                
                 
                 ind = find(n==filesep);
                 if isempty(ind);
@@ -1554,9 +1588,9 @@ set(pane,'Visible','on');
         paramenu4(end+1) = uimenu(paramenu3(4),'Label','16mm','CallBack',@groupCheck);
         
         paramenu3(5) = uimenu(paramenu1(1),'Label','Neighbor Def.');
-        paramenu4(end+1) = uimenu(paramenu3(5),'Label','6','Checked','on','CallBack',@groupCheck);
+        paramenu4(end+1) = uimenu(paramenu3(5),'Label','6','CallBack',@groupCheck);
         paramenu4(end+1) = uimenu(paramenu3(5),'Label','18','CallBack',@groupCheck);
-        paramenu4(end+1) = uimenu(paramenu3(5),'Label','26','CallBack',@groupCheck);
+        paramenu4(end+1) = uimenu(paramenu3(5),'Label','26','Checked','on','CallBack',@groupCheck);
         
         
         paramenu3(7) = uimenu(paramenu1(1),'Label','Labeling');
@@ -1688,7 +1722,7 @@ set(pane,'Visible','on');
         end
         op = floor([50 ss(4)-75-((ss(3)/pro)*rat)  ss(3)/pro (ss(3)/pro)*rat]);
         
-        pane = figure;
+        pane = figure('Visible','off');
         
         set(gcf, 'Position', op,'toolbar','none', 'Name', 'FIVE','Visible','off');
         set(gcf, 'WindowButtonUpFcn', @buttonUp);
@@ -2529,75 +2563,6 @@ set(pane,'Visible','on');
         end
     end
 
-    function getClusterParams
-        
-        vn = get(con(21,1),'Value');
-        if vn<2
-            return
-        end
-        
-        clear S;
-        
-        S.mask = [];
-        S.SPM = 0;
-        
-        if strcmpi(get(paramenu4(1),'Checked'),'on')
-            S.sign = 'pos';
-        elseif strcmpi(get(paramenu4(2),'Checked'),'on')
-            S.sign = 'neg';
-        end;
-        
-        if numel(Obj(vn).DF)==1;
-            if any(isnan(Obj(vn).DF))
-                S.type = 'none';
-                S.df1 = [];
-            elseif any(isinf(Obj(vn).DF))
-                S.type = 'Z';
-                S.df1 = inf;
-            else
-                S.type = 'T';
-                S.df1 = Obj(vn).DF;
-            end
-            
-        elseif numel(Obj(vn).DF)==2;
-            S.type = 'F';
-            S.df1 = Obj(vn).DF(1);
-            S.df2 = Obj(vn).DF(2);
-        end
-
-        if strcmpi(S.type,'none');
-            if numel(Obj(vn).Thresh)==4;
-                error('Threshold can only contain two terms (one-sided)');
-            end
-            i1 = find(abs(Obj(vn).Thresh)==min(abs(Obj(vn).Thresh)));
-            S.thresh = Obj(vn).Thresh(i1);
-            if strcmpi(S.sign,'pos'); l = 1; else l = -1;end
-            if sign(S.thresh)~=l
-                error('Direction of peaks (from Parameters-->Sign) does not match sign of the specified threshold.');
-            end
-        else
-            S.thresh = Obj(vn).PVal;
-        end
-        
-        S.voxlimit = str2num(get(findobj(paramenu3(3),'Checked','on'),'Label'));
-           
-        S.separation = str2num(strtok(get(findobj(paramenu3(4),'Checked','on'),'Label'),'m'));
-        S.conn = str2num(get(findobj(paramenu3(5),'Checked','on'),'Label'));
-
-        tmp = str2num(get(con(23),'String'));
-        if isempty(tmp); tmp = 0; end
-        S.cluster = tmp;
-        
-        if strcmpi(get(findobj(paramenu3(7),'Label','Use Nearest Label'),'Checked'),'on')
-            S.nearest = 1;
-        else
-            S.nearest = 0;
-        end
-        
-        S.label = get(findobj(paramenu3(8),'Checked','on'),'Label');
-        
-    end
-
     function groupCheck(varargin)        
         if varargin{1}==paramenu3(19)
             state = get(varargin{1},'Checked');
@@ -3151,16 +3116,132 @@ set(pane,'Visible','on');
         switchObj;
     end
 
+    function getClusterParams
+        vn = get(con(21,1),'Value');
+        if vn<2
+            return
+        end
+        
+        clear S;
+        
+        S.mask = [];
+        S.SPM = 0;
+        
+        if strcmpi(get(paramenu4(1),'Checked'),'on')
+            S.sign = 'pos';
+        elseif strcmpi(get(paramenu4(2),'Checked'),'on')
+            S.sign = 'neg';
+        end;
+        
+        if numel(Obj(vn).DF)==1;
+            if any(isnan(Obj(vn).DF))
+                S.type = 'none';
+                S.df1 = [];
+            elseif any(isinf(Obj(vn).DF))
+                S.type = 'Z';
+                S.df1 = inf;
+            else
+                S.type = 'T';
+                S.df1 = Obj(vn).DF;
+            end
+            
+        elseif numel(Obj(vn).DF)==2;
+            S.type = 'F';
+            S.df1 = Obj(vn).DF(1);
+            S.df2 = Obj(vn).DF(2);
+        end
+
+        if strcmpi(S.type,'none');
+            if numel(Obj(vn).Thresh)==4;
+                error('Threshold can only contain two terms (one-sided)');
+            end
+            i1 = find(abs(Obj(vn).Thresh)==min(abs(Obj(vn).Thresh)));
+            S.thresh = Obj(vn).Thresh(i1);
+            if strcmpi(S.sign,'pos'); l = 1; else l = -1;end
+            if sign(S.thresh)~=l
+                error('Direction of peaks (from Parameters-->Sign) does not match sign of the specified threshold.');
+            end
+        else
+            S.thresh = Obj(vn).PVal;
+        end
+        
+        S.voxlimit = str2num(get(findobj(paramenu3(3),'Checked','on'),'Label'));
+           
+        S.separation = str2num(strtok(get(findobj(paramenu3(4),'Checked','on'),'Label'),'m'));
+        S.conn = str2num(get(findobj(paramenu3(5),'Checked','on'),'Label'));
+
+        tmp = str2num(get(con(23),'String'));
+        if isempty(tmp); tmp = 0; end
+        S.cluster = tmp;
+        
+        if strcmpi(get(findobj(paramenu3(7),'Label','Use Nearest Label'),'Checked'),'on')
+            S.nearest = 1;
+        else
+            S.nearest = 0;
+        end
+        
+        S.label = get(findobj(paramenu3(8),'Checked','on'),'Label');
+        
+        %%% New Params
+        % S.UID = [];
+        % S.out = [];
+        % S.df2 = ?  
+        
+        th = Obj(vn).h;
+        [a b c] = fileparts(th.fname);
+        
+        %%% Create a mask based on the current masking field.
+        % th.pinfo = [1 0 352]';
+        % th.dt = [2 0];
+        % th.fname = [a filesep 'tmpPeakMask.nii'];
+        % spm_write_vol(th,Obj(vn).mask);
+        % S.mask = th.fname;
+        
+        S.exact = 0;
+        % S.sphere = 0;
+        % S.clustersphere=0;
+        S.SV=0;
+
+        A = load([a filesep 'I.mat']);
+        % S.RESELS = [];
+        
+        %%% Will need to double check this with a repeated measures design.
+        tmp = regexp(b,'_','split');
+        effect = tmp{3};
+        et = [];
+        for ii = 1:numel(A.I.MOD.RFMs)
+            for jj = 1:numel(A.I.MOD.RFMs(ii).Effect)
+                if strcmpi(A.I.MOD.RFMs(ii).Effect(jj).name,effect)
+                    et = ii;
+                    break
+                end
+            end
+        end
+        
+        try
+            if ~isempty(et)
+                S.FWHM = A.I.FWHM{et};
+                % S.RESELS = spm_resels_vol(Obj(vn).h,S.FWHM)';
+            end
+        catch
+        end
+        
+        S.threshc = str2num(get(findobj(paramenu3(18),'Checked','on'),'Label'));
+        % S.exactvoxel = [];
+        % S.FIVE = [];`
+        % S.savecorrected.do = 1;
+        % S.savecorrected.type = {'cFWE' 'vFWE' 'vFDR' 'cFDR'};
+     end
+
     function getPeakInfo(varargin)
         vn = get(con(21,1),'Value');
         S = [];
+
         getClusterParams;
         peak = [];   
-        
-        %S.FWHM = [15.4639   15.4037   15.3548];
-        %[voxels voxelstats clusterstats sigthresh regions mapparameters UID]
-        %keyboard; 
-        [peak.voxels peak.voxelstats peak.clusterstats peak.sigthresh peak.regions] = peak_nii(Obj(vn).FullPath(1:end-2),S);
+        % save S.mat S;
+        [peak.voxels, peak.voxelstats, peak.clusterstats, peak.sigthresh, peak.regions, peak.mapparameters, peak.UID] = peak_nii(Obj(vn).FullPath(1:end-2),S);
+
         assignin('base','peak',peak);
 
         figure(666); clf; %reset(666);
@@ -3175,13 +3256,17 @@ set(pane,'Visible','on');
         %set(tabHand, 'uicontextmenu',tableMenu);
         
         Out = cell(size(peak.voxels{1},1)+1 ,9);
-        Out(1,:) = {'Cluster Size' 'T/F-Stat' 'X' 'Y' 'Z' 'N_peaks' 'Cluster Num' 'Region Num' 'Region Name'};
+        Out(1,:) = {'Cluster Size' 'T/F-Stat' 'X' 'Y' 'Z' 'N_peaks' 'Cluster Num'  'Region Num' 'Region Name'};
+        % 'Other1' 'Other2' 'Other3' 'Other4'
         
-        Out(2:end,1:7) = num2cell(peak.voxels{1});
+        Out(2:end,1:7) = num2cell(peak.voxels{1}(:,1:7));
+        
         Out(2:end,8:9) = peak.regions;
         
         [a b c] = fileparts(Obj(vn).FullPath);
         WriteDataToText(Out,[a filesep 'peakinfo.csv'],'w',',');
+        
+        %delete(th.fname);
     end
 
     function goToCluster(varargin)
@@ -3383,7 +3468,9 @@ set(pane,'Visible','on');
     end
 
     function ExtentThresh(varargin)
-        CM = 18;%str2num(get(findobj(paramenu3(5),'Checked','On'),'Label'));
+        %keyboard;
+        %CM = 18;%
+        CM = str2num(get(findobj(paramenu3(5),'Checked','On'),'Label'));
 
         vn = get(con(21,1),'Value');
         ClusterExtent = str2num(get(con(23),'String'));
@@ -3399,12 +3486,14 @@ set(pane,'Visible','on');
         
          
         if numel(Obj(vn).Thresh)==2
-            ind = find(Obj(vn).I<Obj(vn).Thresh(1) | Obj(vn).I>Obj(vn).Thresh(2));
+            % ind = find(Obj(vn).I<Obj(vn).Thresh(1) | Obj(vn).I>Obj(vn).Thresh(2));
+            ind = find(Obj(vn).I>Obj(vn).Thresh(1) & Obj(vn).I<Obj(vn).Thresh(2));
         else
-            ind = find(Obj(vn).I<Obj(vn).Thresh(1) | Obj(vn).I>Obj(vn).Thresh(4) | (Obj(vn).I>Obj(vn).Thresh(2) & Obj(vn).I<Obj(vn).Thresh(3)));
+            % ind = find(Obj(vn).I<Obj(vn).Thresh(1) | Obj(vn).I>Obj(vn).Thresh(4) | (Obj(vn).I>Obj(vn).Thresh(2) & Obj(vn).I<Obj(vn).Thresh(3)));
+            ind = find( (Obj(vn).I>Obj(vn).Thresh(1) & Obj(vn).I<Obj(vn).Thresh(2)) | (Obj(vn).I>Obj(vn).Thresh(3) & Obj(vn).I<Obj(vn).Thresh(4)));
         end
-        %tmpI(ind) = NaN;
-        ind = setdiff(1:prod(Obj(vn).axLims),ind);
+        % ind = setdiff(1:prod(Obj(vn).axLims),ind);
+        ind = ind(:)';
         
         L = [];
         [L(:,1) L(:,2) L(:,3)] = ind2sub(Obj(vn).h.dim,ind);

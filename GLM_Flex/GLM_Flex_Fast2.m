@@ -701,7 +701,8 @@ for q=1     %% Compute Statistics
                 
                 I.FWHM{ii} = FWHM;
                 
-                [tmpM tmpH] = openIMG('RPV.img');
+                %[tmpM tmpH] = openIMG('RPV.img'); % ORIGINAL
+                [tmpM tmpH] = openIMG('RPV.nii'); % KEVIN EDIT
                 tmpH.fname = ['RPV' tm(end-2:end) '.nii'];
                 spm_write_vol(tmpH,tmpM);
                 delete('RPV.*')
